@@ -46,6 +46,9 @@ class Client:
         resp = requests.get('some protected url',
                             cookies=client.cookies,
                             auth=client.auth())
+
+    All the keyword parameters are available as members of the Client.
+
     @param interaction_methods A list of Interactor implementations.
     @param key The private key of the client {bakery.PrivateKey}
     @param cookies storage for the cookies {CookieJar}. It should be the
@@ -57,9 +60,22 @@ class Client:
             interaction_methods = [WebBrowserInteractor()]
         if cookies is None:
             cookies = requests.cookies.RequestsCookieJar()
-        self._interaction_methods = interaction_methods
-        self._key = key
+        self.interaction_methods = interaction_methods
+        self.key = key
         self.cookies = cookies
+
+    def clone(self):
+        '''Return a shallow copy of the Client. This can be used
+        to create a Client with some parameters changed.
+        Note that the key, interaction_methods and cookies
+        members are still the same, so adding an interaction method
+        to the cloned client will also add it to the original.
+        '''
+        return Client(
+            interaction_methods=self.interaction_methods,
+            key=self.key,
+            cookies=self.cookies,
+        )
 
     def auth(self):
         '''Return an authorizer object suitable for passing
@@ -93,7 +109,7 @@ class Client:
         discharges = bakery.discharge_all(
             error.info.macaroon,
             self.acquire_discharge,
-            self._key,
+            self.key,
         )
         macaroons = '[' + ','.join(map(utils.macaroon_to_json_string, discharges)) + ']'
         all_macaroons = base64.urlsafe_b64encode(utils.to_bytes(macaroons))
@@ -167,7 +183,7 @@ class Client:
         error response.
         @return DischargeToken, bakery.Macaroon
         '''
-        if self._interaction_methods is None or len(self._interaction_methods) == 0:
+        if self.interaction_methods is None or len(self.interaction_methods) == 0:
             raise InteractionError('interaction required but not possible')
         # TODO(rogpeppe) make the robust against a wider range of error info.
         if error_info.info.interaction_methods is None and \
@@ -175,7 +191,7 @@ class Client:
             # It's an old-style error; deal with it differently.
             return None, self._legacy_interact(location, error_info)
 
-        for interactor in self._interaction_methods:
+        for interactor in self.interaction_methods:
             found = error_info.info.interaction_methods.get(interactor.kind())
             if found is None:
                 continue
@@ -195,14 +211,14 @@ class Client:
         method_urls = {
             "interactive": visit_url
         }
-        if len(self._interaction_methods) > 1 or \
-                self._interaction_methods[0].kind() != WEB_BROWSER_INTERACTION_KIND:
+        if len(self.interaction_methods) > 1 or \
+                self.interaction_methods[0].kind() != WEB_BROWSER_INTERACTION_KIND:
             # We have several possible methods or we only support a non-window
             # method, so we need to fetch the possible methods supported by
             # the discharger.
             method_urls = _legacy_get_interaction_methods(visit_url)
 
-        for interactor in self._interaction_methods:
+        for interactor in self.interaction_methods:
             kind = interactor.kind()
             if kind == WEB_BROWSER_INTERACTION_KIND:
                 # This is the old name for browser-window interaction.
